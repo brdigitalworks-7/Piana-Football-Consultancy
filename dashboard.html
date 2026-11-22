@@ -4765,6 +4765,49 @@ function buildReportV2ShareHtml(r){
     <p style="margin-top:30px;color:#999;font-size:11px;border-top:1px solid #eee;padding-top:12px;text-align:center">Shared via the Piana Football Consultancy scouting platform.</p>
   </div>`;
 }
+/* Print / Download toolbar shared by both scout-report windows. "Download as
+   PDF" saves a real .pdf file with html2pdf.js (loaded from jsdelivr, like
+   Chart.js and Supabase above) instead of opening the print dialog. The
+   library is loaded at the END of the report (reportPdfLib) so the report
+   shows straight away and never waits on the CDN. If the button is clicked
+   before the library arrives it waits up to 10s; if the library can't load
+   or the render fails, it falls back to the print dialog so the button
+   always does something. The toolbar sits outside #report, so it never
+   appears in the PDF or the printout. */
+function reportPdfToolbar(r){
+  // Accents are stripped from the FILE NAME only (Seán -> Sean): Chrome
+  // ignored the name and saved "download" when it contained a fada.
+  const fileName=('Scout Report - '+(r.playerName||'Player')).normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^\x20-\x7E]+/g,'').replace(/[\\/:*?"<>|]+/g,'').replace(/\s+/g,' ').trim()+'.pdf';
+  const fn=JSON.stringify(fileName).replace(/</g,'\\u003c');
+  return `<div class="pdf-toolbar"><button onclick="window.print()">Print</button><button class="primary" id="dlPdfBtn" onclick="downloadPdf()">Download as PDF</button></div>
+    <script>
+      function downloadPdf(){
+        var btn=document.getElementById('dlPdfBtn');
+        if(btn.disabled)return;
+        var done=function(){btn.disabled=false;btn.textContent='Download as PDF';};
+        var run=function(){
+          html2pdf().set({
+            margin:[10,10,12,10],filename:${fn},
+            image:{type:'jpeg',quality:0.95},
+            html2canvas:{scale:2,backgroundColor:'#ffffff',useCORS:true},
+            jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},
+            pagebreak:{mode:['css','legacy'],avoid:['h2','tr','.cell','.box','.radar-wrap','.head','.scoreband']}
+          }).from(document.getElementById('report')).save().then(done,function(){done();window.print();});
+        };
+        btn.disabled=true;btn.textContent='Preparing PDF\u2026';
+        if(window.html2pdf)return run();
+        if(window.__h2p==='fail'){done();return window.print();}
+        var waited=0,iv=setInterval(function(){
+          waited+=200;
+          if(window.html2pdf){clearInterval(iv);run();}
+          else if(window.__h2p==='fail'||waited>=10000){clearInterval(iv);done();window.print();}
+        },200);
+      }
+    <\/script>`;
+}
+function reportPdfLib(){
+  return `<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js" onload="window.__h2p='ok'" onerror="window.__h2p='fail'"><\/script>`;
+}
 /* Real, print-based Scout Report PDF (same technique as printInvoice/downloadCV). */
 function downloadReportPDF(r){
   if((r.reportFormat||'legacy')==='v2'){
@@ -4811,7 +4854,7 @@ function downloadReportPDF(r){
       .pdf-toolbar button.primary{background:#0A0A0A;color:#D4AF37;border-color:#0A0A0A}
       @media print{.pdf-toolbar{display:none}}
     </style></head><body>
-    <div class="pdf-toolbar"><button onclick="window.print()">Print</button><button class="primary" onclick="window.print()">Download as PDF</button></div>
+    ${reportPdfToolbar(r)}<div id="report">
     <div class="head"><div class="eyebrow">Piana Football Consultancy — Scout Report</div>
       <h1>${esc(r.playerName||'Player')}</h1>
       <p>${esc(r.opp||'')} · ${esc(r.date||'')} · ${esc(r.pos||'')} · ${r.minutes||'—'} min · Scout: ${esc(r.scoutName||'PFC')}</p></div>
@@ -4831,7 +4874,7 @@ function downloadReportPDF(r){
     <h2>Improvements</h2><p class="body">${esc(r.weakness||'—')}</p>
     <h2>Scout's Recommendation</h2><p class="body">${esc(r.recommendation||'—')}</p>
     <p class="note">Generated via the Piana Football Consultancy scouting platform.</p>
-    </body></html>`);
+    </div>${reportPdfLib()}</body></html>`);
   w.document.close();
 }
 function downloadReportPDFV2(r,radarImg){
@@ -4869,7 +4912,7 @@ function downloadReportPDFV2(r,radarImg){
       .pdf-toolbar button.primary{background:#0A0A0A;color:#D4AF37;border-color:#0A0A0A}
       @media print{.pdf-toolbar{display:none}}
     </style></head><body>
-    <div class="pdf-toolbar"><button onclick="window.print()">Print</button><button class="primary" onclick="window.print()">Download as PDF</button></div>
+    ${reportPdfToolbar(r)}<div id="report">
     <div class="head"><div class="eyebrow">Piana Football Consultancy — Scout Report</div>
       <h1>${esc(r.playerName||'Player')}</h1>
       <p>${esc(r.pos||'')} · ${esc(r.clubName||'')} · ${esc(r.nationality||'')} · Scouted ${esc(r.scoutingDate||r.date||'')} by ${esc(r.scoutName||'PFC')}</p>
@@ -4895,7 +4938,7 @@ function downloadReportPDFV2(r,radarImg){
     <div class="grid3">${attrs.map(a=>{const v=ratings[a];return `<div class="cell"><small>${esc(a).toUpperCase()}</small><b>${v!=null?v+'/10':'—'}</b></div>`;}).join('')}</div>
     ${radarImg?`<h2>Performance Analysis</h2><div class="radar-wrap"><img src="${radarImg}" alt="Attribute radar chart"></div>`:''}
     <p class="note">Generated via the Piana Football Consultancy scouting platform.</p>
-    </body></html>`);
+    </div>${reportPdfLib()}</body></html>`);
   w.document.close();
 }
 VIEWS.videos=async host=>{
@@ -6346,33 +6389,68 @@ function saEditAccount(k,view){const a=accByKey(k);if(!a)return;const real=!isEd
       <div class="field"><label>Level</label><input name="level" value="${esc(levelVal)}" placeholder="e.g. Senior / Academy"></div>
     </div></div>`:''}
     ${showPlayer?`<div class="field" style="margin-top:12px"><div class="form-grid">
-      <div class="field"><label>Position</label><select name="position" id="saEditPos"><option value="">${real?'Loading…':'Select position…'}</option>${real?'':PS_POSITIONS.map(p=>`<option value="${esc(p)}" ${p===normalizePosition(ref.pos||'')?'selected':''}>${esc(p)}</option>`).join('')}</select></div>
-      <div class="field"><label>Current club</label><input name="club" id="saEditClub" value="${esc(clubVal)}" placeholder="e.g. Shelbourne FC"></div>
+      <div class="field"><label>Position</label><select name="position" id="saEditPos" data-pp="position" ${real?'disabled':''}><option value="">${real?'Loading…':'Select position…'}</option>${real?'':PS_POSITIONS.map(p=>`<option value="${esc(p)}" ${p===normalizePosition(ref.pos||'')?'selected':''}>${esc(p)}</option>`).join('')}</select></div>
+      <div class="field"><label>Current club</label><input name="club" id="saEditClub" data-pp="current_club" value="${esc(clubVal)}" placeholder="e.g. Shelbourne FC" ${real?'disabled':''}></div>
     </div>
-    <div class="field" style="margin-top:12px"><label>Nationality</label><input name="nationality" id="saEditNat" value="${esc(natVal)}" placeholder="e.g. Irish"></div>
-    <div class="field" style="margin-top:12px"><label>Availability</label><input name="avail" id="saEditAvail" value="${esc(availVal)}" placeholder="e.g. Available, Not for sale, Available in January">
+    <div class="field" style="margin-top:12px"><label>Nationality</label><input name="nationality" id="saEditNat" data-pp="nationality" value="${esc(natVal)}" placeholder="e.g. Irish" ${real?'disabled':''}></div>
+    <div class="field" style="margin-top:12px"><label>Availability</label><input name="avail" id="saEditAvail" data-pp="transfer_status" value="${esc(availVal)}" placeholder="e.g. Available, Not for sale, Available in January" ${real?'disabled':''}>
       <p style="font-size:11.5px;color:var(--muted);margin-top:4px">Shown to scouts, agents &amp; clubs. Normally set by the player themselves from their own profile — use this to set it on their behalf for a player who hasn't logged in yet.</p>
-    </div></div>`:''}</form>`,
+    </div>${saPlayerExtraFields(ref,real)}</div>`:''}</form>`,
    `<button class="btn btn-line" onclick="closeModal()">Cancel</button><button class="btn btn-gold" onclick="saEditConfirm('${k}','${view}')">Save changes</button>`);
   if(showPlayer&&real)loadPlayerProfileForEdit(ref.id||k.slice(8));
 }
-// Fills the Edit-account modal's position/club/nationality fields for a
-// player, fetched from player_profiles (a separate table from the account
-// row itself, hence the extra round trip rather than being pre-loaded).
+// The rest of a player's profile, editable by staff from Edit account — the
+// same player_profiles columns the player's own Edit profile saves.
+// [form name, label, player_profiles column, input type, placeholder, demo-record key]
+const SA_PP_EXTRA=[
+  ['foot','Preferred foot','preferred_foot','text','e.g. Right','foot'],
+  ['height','Height (cm)','height','number','e.g. 180','height'],
+  ['weight','Weight (kg)','weight','number','e.g. 75','weight'],
+  ['age','Age','age','number','e.g. 17','age'],
+  ['passports','Passport(s)','passports','text','e.g. Irish, Italian','passports'],
+  ['langs','Languages','languages','text','e.g. English, Spanish','langs'],
+  ['contract','Contract status','contract_status','text','e.g. Out of contract June 2027','contract'],
+  ['agent','Agent status','agent_status','text','e.g. No agent','agent'],
+  ['injury','Injury status','injury_status','text','e.g. Fit','injury'],
+  ['education','Education','education','text','e.g. Leaving Cert 2026','education'],
+  ['pphone','Phone','phone','tel','e.g. +353 87 000 0000','phone'],
+  ['parent','Parent / guardian (if under 18)','parent_guardian','text','Name, phone and email','parent']
+];
+function saPlayerExtraFields(ref,real){
+  const fld=([n,l,col,t,ph,dk])=>`<div class="field${n==='parent'?' full':''}"><label>${l}</label><input name="${n}" data-pp="${col}" type="${t}"${t==='number'?' min="0"':''} value="${real?'':esc(ref[dk]==null?'':ref[dk])}" placeholder="${esc(ph)}" ${real?'disabled':''}></div>`;
+  return `<div class="section-title" style="margin-top:18px">Player details</div>
+    <div class="form-grid">${SA_PP_EXTRA.map(fld).join('')}</div>
+    <p id="saEditPPNote" style="font-size:11.5px;color:var(--muted);margin-top:4px">${real?'Loading this player\'s details…':'Shown on the player\'s profile card to scouts, agents &amp; clubs.'}</p>`;
+}
+// Fills the Edit-account modal's player fields, fetched from player_profiles
+// (a separate table from the account row itself, hence the extra round trip
+// rather than being pre-loaded). Player fields start disabled in real mode
+// and are only enabled once this load succeeds — disabled inputs are left
+// out of the save, so saving before (or after a failed) load can never wipe
+// a player's existing details with blanks.
 async function loadPlayerProfileForEdit(playerId){
-  const sel=$('#saEditPos'),clubEl=$('#saEditClub'),natEl=$('#saEditNat'),availEl=$('#saEditAvail');
-  const fallback=()=>{if(sel)sel.innerHTML='<option value="">Select position…</option>'+PS_POSITIONS.map(p=>`<option value="${esc(p)}">${esc(p)}</option>`).join('');};
+  const sel=$('#saEditPos'),note=$('#saEditPPNote');
+  const fields=[...document.querySelectorAll('#saEditForm [data-pp]')];
+  const fillPositions=matched=>{if(sel)sel.innerHTML='<option value="">Select position…</option>'+PS_POSITIONS.map(p=>`<option value="${esc(p)}" ${p===matched?'selected':''}>${esc(p)}</option>`).join('');};
   try{
-    const {data,error}=await supabaseClient.from('player_profiles').select('position,current_club,nationality,transfer_status').eq('id',playerId).maybeSingle();
+    const cols=[...new Set(fields.map(el=>el.dataset.pp))].join(',');
+    const {data,error}=await supabaseClient.from('player_profiles').select(cols).eq('id',playerId).maybeSingle();
     if(error)throw error;
-    const matched=normalizePosition((data&&data.position)||'');
-    if(sel)sel.innerHTML='<option value="">Select position…</option>'+PS_POSITIONS.map(p=>`<option value="${esc(p)}" ${p===matched?'selected':''}>${esc(p)}</option>`).join('');
-    if(clubEl&&data&&data.current_club)clubEl.value=data.current_club;
-    if(natEl&&data&&data.nationality)natEl.value=data.nationality;
-    if(availEl&&data&&data.transfer_status)availEl.value=data.transfer_status;
-  }catch(e){fallback();}
+    if(!$('#saEditForm'))return; // modal closed while loading
+    const d=data||{};
+    fillPositions(normalizePosition(d.position||''));
+    fields.forEach(el=>{
+      if(el!==sel&&d[el.dataset.pp]!=null)el.value=d[el.dataset.pp];
+      el.disabled=false;
+    });
+    if(note)note.textContent='Shown on the player\'s profile card to scouts, agents & clubs. Normally filled in by the player — use these to complete a profile on their behalf.';
+  }catch(e){
+    fillPositions('');
+    if(note){note.style.color='var(--danger)';note.textContent='Couldn\'t load this player\'s details ('+((e&&e.message)||'unknown error')+'). Player fields are locked so nothing is overwritten — close and try again.';}
+  }
 }
 async function saEditConfirm(k,view){const a=accByKey(k);if(!a)return;const fd=new FormData($('#saEditForm'));
+  const ppFieldEls=[...document.querySelectorAll('#saEditForm [data-pp]')];
   const name=fd.get('name'),status=fd.get('status');const rk=a.rk;
   if(isEditorPreview()){
     const email=fd.get('email');
@@ -6382,7 +6460,8 @@ async function saEditConfirm(k,view){const a=accByKey(k);if(!a)return;const fd=n
       if((rk==='scout'||rk==='agent')&&fd.has('region'))a._ref.region=fd.get('region');
       if((rk==='scout'||rk==='agent'||rk==='club')&&fd.has('license'))a._ref.license=fd.get('license');
       if(rk==='club'){if(fd.has('country'))a._ref.country=fd.get('country');if(fd.has('level'))a._ref.level=fd.get('level');}
-      if(rk==='player'){if(fd.has('position'))a._ref.pos=fd.get('position');if(fd.has('club'))a._ref.club=fd.get('club');if(fd.has('nationality'))a._ref.nat=fd.get('nationality');if(fd.has('avail'))a._ref.transfer=fd.get('avail');}
+      if(rk==='player'){if(fd.has('position'))a._ref.pos=fd.get('position');if(fd.has('club'))a._ref.club=fd.get('club');if(fd.has('nationality'))a._ref.nat=fd.get('nationality');if(fd.has('avail'))a._ref.transfer=fd.get('avail');
+        SA_PP_EXTRA.forEach(([n,,,t,,dk])=>{if(fd.has(n)){const v=String(fd.get(n)).trim();a._ref[dk]=t==='number'?(v===''?null:Number(v)):v;}});}
     }
     setAccStatus(a,status);save();saLog('Edited account',name,'Content');closeModal();go(view);toast('Account updated');
     return;
@@ -6404,12 +6483,13 @@ async function saEditConfirm(k,view){const a=accByKey(k);if(!a)return;const fd=n
     if('club_level' in upd)a.level=upd.club_level||'';
     if(a._ref)Object.assign(a._ref,upd);
     let playerFieldsFailed=false,playerFieldsErr='';
-    if(rk==='player'&&(fd.has('position')||fd.has('club')||fd.has('nationality')||fd.has('avail'))){
+    // Every enabled player field (position/club/nationality/availability plus
+    // the SA_PP_EXTRA details) — disabled ones (still loading, or failed to
+    // load) are skipped so a player's existing data is never blanked.
+    const ppEls=rk==='player'?ppFieldEls.filter(el=>!el.disabled):[];
+    if(ppEls.length){
       const pp={id,user_id:id};
-      if(fd.has('position'))pp.position=fd.get('position')||null;
-      if(fd.has('club'))pp.current_club=fd.get('club')||null;
-      if(fd.has('nationality'))pp.nationality=fd.get('nationality')||null;
-      if(fd.has('avail'))pp.transfer_status=fd.get('avail')||null;
+      ppEls.forEach(el=>{const v=String(el.value).trim();pp[el.dataset.pp]=v===''?null:(el.type==='number'?Number(v):v);});
       try{const {error:ppErr}=await supabaseClient.from('player_profiles').upsert(pp);if(ppErr)throw ppErr;}
       catch(e){playerFieldsFailed=true;playerFieldsErr=(e&&e.message)||'unknown error';console.error('Could not save player_profiles for player '+id+':',e);}
     }
@@ -6418,7 +6498,7 @@ async function saEditConfirm(k,view){const a=accByKey(k);if(!a)return;const fd=n
     // deliberate — this exact save has failed silently before, so seeing the
     // real reason (an RLS message, a constraint, etc.) in the toast itself
     // means it can be diagnosed without opening browser dev tools.
-    toast(playerFieldsFailed?'Account updated, but position/club/nationality/availability could not be saved: '+playerFieldsErr:'Account updated');
+    toast(playerFieldsFailed?'Account updated, but the player details could not be saved: '+playerFieldsErr:'Account updated');
   }catch(e){toast('Could not update account: '+(e.message||'unknown error'));}
 }
 
