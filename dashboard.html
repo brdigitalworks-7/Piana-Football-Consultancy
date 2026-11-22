@@ -4217,7 +4217,30 @@ function requestIntro(id){const p=P(id);
 function viewPlayer(id){
   if(isEditorPreview()){viewPlayerDemo(id);return;}
   const p=REAL_SEARCH_PLAYERS.find(x=>x.id===id)||(REAL_WATCHLIST_PLAYERS||[]).find(x=>x.id===id)||(REAL_REP_PLAYERS||[]).find(x=>x.id===id);
-  if(!p){toast('Could not find that player');return;}
+  if(p){renderPlayerProfileModal(p,id);return;}
+  // Not in any of the recruiter-scoped lists above — this happens for
+  // Admin/Super Admin opening a profile from Player Management, since the
+  // browsing data those lists come from (get_players_for_browsing) is
+  // restricted to scout/agent/club accounts and never runs for staff.
+  // Staff have their own RLS read access to profiles/player_profiles, so
+  // fetch directly instead of failing with "Could not find that player".
+  modal('Loading…','<p style="padding:40px;text-align:center;color:var(--muted)">Loading player profile…</p>','');
+  fetchPlayerForProfile(id).then(full=>{
+    if(!full){closeModal();toast('Could not find that player');return;}
+    renderPlayerProfileModal(full,id);
+  }).catch(e=>{closeModal();toast('Could not load player profile: '+(e.message||'unknown error'));});
+}
+async function fetchPlayerForProfile(id){
+  const [{data:prof,error:e1},{data:pp,error:e2}]=await Promise.all([
+    supabaseClient.from('profiles').select('id,full_name').eq('id',id).maybeSingle(),
+    supabaseClient.from('player_profiles').select('position,current_club,nationality,age,overall_rating,preferred_foot,height,weight,passports,contract_status,languages,agent_status,injury_status,transfer_status').eq('id',id).maybeSingle()
+  ]);
+  if(e1)throw e1;if(e2)throw e2;
+  if(!prof)return null;
+  return {id,full_name:prof.full_name,...(pp||{})};
+}
+function renderPlayerProfileModal(p,id){
+  const isStaff=state.role==='admin'||state.role==='super_admin';
   modal(esc(p.full_name||'Player'),`<div style="display:flex;gap:16px;margin-bottom:16px"><div class="ph" style="width:64px;height:64px;border-radius:12px;background:var(--ink);color:var(--gold);display:grid;place-items:center;font-weight:700">${initials(p.full_name||'')}</div>
     <div><h3>${esc(p.full_name||'Player')}</h3><p style="color:var(--muted);font-size:13px">${esc(p.position||'—')} · ${esc(p.current_club||'—')}</p>
     <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${badge(p.transfer_status||'Available')}${p.injury_status?badge(p.injury_status):''}${p.overall_rating?`<span class="badge b-gold">Overall ${p.overall_rating}</span>`:''}</div></div></div>
@@ -4227,6 +4250,7 @@ function viewPlayer(id){
       <dt>Languages</dt><dd>${esc(p.languages||'—')}</dd></dl></div>
     <div class="section-title" style="margin-top:16px">Scout Rating</div>
     <div id="vpScoutCard"><p style="color:var(--muted);font-size:13px">Loading…</p></div>`,
+    isStaff?`<button class="btn btn-line" onclick="closeModal()">Close</button>`:
     `<button class="btn btn-line" onclick="closeModal()">Close</button>
      <button class="btn btn-line" style="color:#dc2626;border-color:#fecaca" onclick="reportProfile('${id}')"><i data-lucide="flag"></i> Report</button>
      <button class="btn btn-gold" onclick="closeModal();requestRealIntro('${id}','${esc((p.full_name||'Player').replace(/'/g,"\\'"))}')"><i data-lucide="handshake"></i> Request intro</button>`,
@@ -4782,7 +4806,12 @@ function downloadReportPDF(r){
       td:first-child{color:#888;width:170px}
       p.body{font-size:13px;line-height:1.6;color:#333}
       .note{margin-top:36px;color:#999;font-size:11px;border-top:1px solid #eee;padding-top:12px}
+      .pdf-toolbar{display:flex;gap:10px;justify-content:flex-end;margin-bottom:24px}
+      .pdf-toolbar button{font:inherit;font-size:13px;font-weight:600;padding:9px 18px;border-radius:8px;border:1px solid #ddd;background:#fff;cursor:pointer}
+      .pdf-toolbar button.primary{background:#0A0A0A;color:#D4AF37;border-color:#0A0A0A}
+      @media print{.pdf-toolbar{display:none}}
     </style></head><body>
+    <div class="pdf-toolbar"><button onclick="window.print()">Print</button><button class="primary" onclick="window.print()">Download as PDF</button></div>
     <div class="head"><div class="eyebrow">Piana Football Consultancy — Scout Report</div>
       <h1>${esc(r.playerName||'Player')}</h1>
       <p>${esc(r.opp||'')} · ${esc(r.date||'')} · ${esc(r.pos||'')} · ${r.minutes||'—'} min · Scout: ${esc(r.scoutName||'PFC')}</p></div>
@@ -4802,7 +4831,6 @@ function downloadReportPDF(r){
     <h2>Improvements</h2><p class="body">${esc(r.weakness||'—')}</p>
     <h2>Scout's Recommendation</h2><p class="body">${esc(r.recommendation||'—')}</p>
     <p class="note">Generated via the Piana Football Consultancy scouting platform.</p>
-    <script>window.print();<\/script>
     </body></html>`);
   w.document.close();
 }
@@ -4836,7 +4864,12 @@ function downloadReportPDFV2(r,radarImg){
       .radar-wrap{text-align:center;background:#0A0A0A;border-radius:10px;padding:18px;margin-bottom:16px}
       .radar-wrap img{max-width:560px;width:100%}
       .note{margin-top:36px;color:#999;font-size:11px;border-top:1px solid #eee;padding-top:12px;text-align:center}
+      .pdf-toolbar{display:flex;gap:10px;justify-content:flex-end;margin-bottom:24px}
+      .pdf-toolbar button{font:inherit;font-size:13px;font-weight:600;padding:9px 18px;border-radius:8px;border:1px solid #ddd;background:#fff;cursor:pointer}
+      .pdf-toolbar button.primary{background:#0A0A0A;color:#D4AF37;border-color:#0A0A0A}
+      @media print{.pdf-toolbar{display:none}}
     </style></head><body>
+    <div class="pdf-toolbar"><button onclick="window.print()">Print</button><button class="primary" onclick="window.print()">Download as PDF</button></div>
     <div class="head"><div class="eyebrow">Piana Football Consultancy — Scout Report</div>
       <h1>${esc(r.playerName||'Player')}</h1>
       <p>${esc(r.pos||'')} · ${esc(r.clubName||'')} · ${esc(r.nationality||'')} · Scouted ${esc(r.scoutingDate||r.date||'')} by ${esc(r.scoutName||'PFC')}</p>
@@ -4862,13 +4895,6 @@ function downloadReportPDFV2(r,radarImg){
     <div class="grid3">${attrs.map(a=>{const v=ratings[a];return `<div class="cell"><small>${esc(a).toUpperCase()}</small><b>${v!=null?v+'/10':'—'}</b></div>`;}).join('')}</div>
     ${radarImg?`<h2>Performance Analysis</h2><div class="radar-wrap"><img src="${radarImg}" alt="Attribute radar chart"></div>`:''}
     <p class="note">Generated via the Piana Football Consultancy scouting platform.</p>
-    <script>
-      // Wait for the embedded chart image to actually finish loading before
-      // opening the print dialog — printing immediately (like the other
-      // report/invoice PDFs in this app do) races the base64 <img> decode
-      // and can print/save a blank Performance Analysis section.
-      window.onload=function(){window.print();};
-    <\/script>
     </body></html>`);
   w.document.close();
 }
@@ -6612,7 +6638,7 @@ async function renderSaPlayersReal(host,rows){
    <tbody>${merged.length?merged.map(p=>`<tr>
      <td class="t-name"><div class="ph" style="display:grid;place-items:center;background:var(--ink);color:var(--gold);font-weight:700;font-size:12px">${initials(p.name)}</div><div><b>${esc(p.name)}</b><span>${esc(p.nat)}</span></div></td>
      <td>${esc(p.pos)}</td><td>${esc(p.club)}</td><td>${p.membership?saBadge(p.membership):'<span class="badge b-grey">None</span>'}</td><td>${badge(p.transfer)}</td><td>${badge(p.injury)}</td><td>${saBadge(accStatus(p))}</td>
-     <td style="text-align:right"><button class="btn btn-sm btn-line" title="Download CV" onclick="saDownloadPlayerCV('${p.id}')"><i data-lucide="download"></i></button> ${saRowMenu(p.key,'sa-players')}</td></tr>`).join(''):'<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px">No players found.</td></tr>'}</tbody></table></div></div>`;
+     <td style="text-align:right"><button class="btn btn-sm btn-line" title="View profile" onclick="viewPlayer('${p.id}')"><i data-lucide="eye"></i></button> <button class="btn btn-sm btn-line" title="Download CV" onclick="saDownloadPlayerCV('${p.id}')"><i data-lucide="download"></i></button> ${saRowMenu(p.key,'sa-players')}</td></tr>`).join(''):'<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px">No players found.</td></tr>'}</tbody></table></div></div>`;
   icons();
 }
 async function saViewInjuries(playerId){
