@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+  <url>
+    <loc>https://pianafootballconsultancy.com/</loc>
+    <lastmod>2026-09-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+    <image:image>
+      <image:loc>https://pianafootballconsultancy.com/images/logo-mark.webp</image:loc>
+      <image:caption>Piana Football Consultancy logo</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://pianafootballconsultancy.com/images/hero.webp</image:loc>
+      <image:caption>Floodlit football stadium at night with golden light</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://pianafootballconsultancy.com/images/action.webp</image:loc>
+      <image:caption>Footballer striking a ball under floodlights</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://pianafootballconsultancy.com/images/network.webp</image:loc>
+      <image:caption>Football scouting network connecting players and clubs worldwide</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://pianafootballconsultancy.com/images/portal-player.webp</image:loc>
+      <image:caption>Player portal dashboard</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://pianafootballconsultancy.com/images/portal-agent.webp</image:loc>
+      <image:caption>Agent portal dashboard</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://pianafootballconsultancy.com/images/portal-scout.webp</image:loc>
+      <image:caption>Scout portal dashboard</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://pianafootballconsultancy.com/images/portal-club.webp</image:loc>
+      <image:caption>Club portal dashboard</image:caption>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://pianafootballconsultancy.com/about.html</loc>
+    <lastmod>2026-09-02</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+    <image:image>
+      <image:loc>https://pianafootballconsultancy.com/images/logo.webp</image:loc>
+      <image:caption>Piana Football Consultancy logo</image:caption>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://pianafootballconsultancy.com/privacy.html</loc>
+    <lastmod>2026-09-02</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://pianafootballconsultancy.com/terms.html</loc>
+    <lastmod>2026-09-02</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+</urlset>

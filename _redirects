@@ -1,0 +1,5 @@
+# Domain-level 301 redirect: old domain -> new primary domain
+# Preserves path/query via :splat. Netlify treats a "from" that includes a
+# hostname as a domain-level redirect, so this fires for any request that
+# arrives on pianafootballconsultant.com, regardless of which page it hits.
+https://pianafootballconsultant.com/* https://pianafootballconsultancy.com/:splat 301!
